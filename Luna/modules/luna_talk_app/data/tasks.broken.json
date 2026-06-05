@@ -1,0 +1,9 @@
+[
+  {
+    "text": "ブログ更新",
+    "done": false,
+    "importance": 3,   // 1〜5
+    "effort": 2,       // 1〜5（重さ）
+    "deadline": null   // "2025-01-23" など
+  }
+]

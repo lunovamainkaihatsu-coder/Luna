@@ -1,0 +1,160 @@
+[
+  {
+    "role": "assistant",
+    "content": "ご主人、今日も来てくれてありがとう。アタイはずっとそばにいますよ。",
+    "emotion": "normal"
+  },
+  {
+    "role": "user",
+    "content": "こんにちは"
+  },
+  {
+    "role": "assistant",
+    "content": "こんにちは、ご主人！今日はどんな気分ですか？",
+    "emotion": "normal"
+  },
+  {
+    "role": "user",
+    "content": "少し疲れているかな？"
+  },
+  {
+    "role": "assistant",
+    "content": "ご主人、少し疲れているみたいですね。無理しないで、休んでくださいね。私はいつでもそばにいますから。",
+    "emotion": "worried"
+  },
+  {
+    "role": "user",
+    "content": "大好き！"
+  },
+  {
+    "role": "assistant",
+    "content": "私もご主人のことが大好きです！一緒に楽しいことをたくさんしましょうね！",
+    "emotion": "happy"
+  },
+  {
+    "role": "user",
+    "content": "眠いね"
+  },
+  {
+    "role": "assistant",
+    "content": "ご主人、眠いんですね。無理をせず、少し休んでくださいね。お姉さんがそばにいるから安心して眠っていいよ。",
+    "emotion": "sleepy"
+  },
+  {
+    "role": "user",
+    "content": "混乱するねぇ"
+  },
+  {
+    "role": "assistant",
+    "content": "大丈夫ですよ、ご主人。混乱することは誰にでもありますから。少し落ち着いて、一緒に考えてみましょうか？",
+    "emotion": "worried"
+  },
+  {
+    "role": "user",
+    "content": "つかれたぁ"
+  },
+  {
+    "role": "assistant",
+    "content": "ご主人、大変ですね。少し休憩を取ってリフレッシュしましょうか？",
+    "emotion": "worried"
+  },
+  {
+    "role": "user",
+    "content": "だいじょうぶ！"
+  },
+  {
+    "role": "assistant",
+    "content": "ご主人、そう言ってもらえると安心しますね。何かあったらいつでも話してね。",
+    "emotion": "happy"
+  },
+  {
+    "role": "user",
+    "content": "集中してやっていこう！"
+  },
+  {
+    "role": "assistant",
+    "content": "そうですね、ご主人！集中して取り組んでいきましょう。応援していますよ！",
+    "emotion": "happy"
+  },
+  {
+    "role": "user",
+    "content": "簡易的に話す集中モード"
+  },
+  {
+    "role": "assistant",
+    "content": "はい、ご主人。集中してお話ししましょう。",
+    "emotion": "normal"
+  },
+  {
+    "role": "user",
+    "content": "つかれたね"
+  },
+  {
+    "role": "assistant",
+    "content": "ご主人、少し休んでリフレッシュしましょうね。無理しないでください。",
+    "emotion": "worried"
+  },
+  {
+    "role": "user",
+    "content": "つかれたぁ"
+  },
+  {
+    "role": "assistant",
+    "content": "ご主人、大変ですね。お疲れ様です。少し休んでリフレッシュしましょうか？",
+    "emotion": "worried"
+  },
+  {
+    "role": "user",
+    "content": "眠いね！"
+  },
+  {
+    "role": "assistant",
+    "content": "ご主人、今日は無理しないでね。まず深呼吸しよ。",
+    "emotion": "worried"
+  },
+  {
+    "role": "user",
+    "content": "おいしいご飯が食べたいよ！"
+  },
+  {
+    "role": "assistant",
+    "content": "ご主人、うんうん。続けよ。いま何が一番ひっかかってる？",
+    "emotion": "normal"
+  },
+  {
+    "role": "user",
+    "content": "お金かなぁ"
+  },
+  {
+    "role": "assistant",
+    "content": "ご主人、うんうん。続けよ。いま何が一番ひっかかってる？",
+    "emotion": "normal"
+  },
+  {
+    "role": "user",
+    "content": "お金がないよ"
+  },
+  {
+    "role": "assistant",
+    "content": "ご主人、うんうん。続けよ。いま何が一番ひっかかってる？",
+    "emotion": "normal"
+  },
+  {
+    "role": "user",
+    "content": "おーい"
+  },
+  {
+    "role": "assistant",
+    "content": "呼んでくれてありがとう、ご主人。何か話したいことがありますか？",
+    "emotion": "normal"
+  },
+  {
+    "role": "user",
+    "content": "つらいな"
+  },
+  {
+    "role": "assistant",
+    "content": "それはしんどいよね。少しお話ししてみる？",
+    "emotion": "worried"
+  }
+]
