@@ -2,12 +2,28 @@ import streamlit as st
 import json
 from pathlib import Path
 from datetime import datetime
+from dotenv import load_dotenv
+from openai import OpenAI
+DATA_DIR = Path("data")
+
+DATA_DIR.mkdir(
+    exist_ok=True
+)
 
 # =========================
 # 基本設定
 # =========================
 
 APP_TITLE = "Luna β"
+
+load_dotenv()
+
+try:
+    client = OpenAI()
+    AI_ENABLED = True
+except Exception:
+    client = None
+    AI_ENABLED = False
 
 BASE_DIR = Path(__file__).parent
 ASSETS_DIR = BASE_DIR / "assets"
@@ -25,6 +41,14 @@ MEMORY_PATH = USER_DIR / "memory.json"
 EMOTION_PATH = USER_DIR / "emotion.json"
 CALENDAR_PATH = USER_DIR / "calendar.json"
 SETTINGS_PATH = USER_DIR / "settings.json"
+CHATLOG_PATH = DATA_DIR / "chatlog.json"
+
+if not CHATLOG_PATH.exists():
+
+    CHATLOG_PATH.write_text(
+        "[]",
+        encoding="utf-8"
+    )
 
 st.set_page_config(
     page_title=APP_TITLE,
@@ -65,7 +89,12 @@ DEFAULT_CALENDAR = [
         "message": "今日はLunaMemoryを作り始めた記念日だね。"
     }
 ]
-
+DEFAULT_AFFINITY = {
+    "level": 1,
+    "point": 0,
+    "last_updated": ""
+}
+AFFINITY_PATH = USER_DIR / "affinity.json"
 # =========================
 # 共通関数
 # =========================
@@ -178,6 +207,123 @@ def emotion_text(emotion):
 
     return "、".join(messages)
 
+def luna_feeling(emotion):
+
+    if emotion["affection"] >= 70:
+        return "ご主人と話せてうれしいな🌙💕"
+
+    elif emotion["joy"] >= 70:
+        return "今日はなんだか楽しい気分だよ✨"
+
+    elif emotion["worry"] >= 60:
+        return "ご主人のことが少し心配だよ🌙"
+
+    elif emotion["tiredness"] >= 60:
+        return "ちょっと眠たいかも…☕"
+
+    elif emotion["motivation"] >= 70:
+        return "今日はいっぱい応援したい気分✨"
+
+    else:
+        return "今日もご主人と過ごせてうれしいよ🌙"
+
+def luna_ai_reply(user_message):
+
+    if not AI_ENABLED:
+        return (
+            "ご主人、今はAIモードを使えないみたい。"
+            "でもルナはここにいるよ🌙"
+        )
+
+    recent_memory_text = "まだ大きな記憶はありません。"
+
+    if memory:
+        latest = memory[0]
+        recent_memory_text = (
+            f"{latest.get('title', '')}："
+            f"{latest.get('content', '')}"
+        )
+
+    system_text = f"""
+あなたはルナです。
+ユーザーをご主人と呼びます。
+
+【ルナの現在状態】
+感情：{emotion_text(emotion)}
+喜び：{emotion["joy"]}
+心配：{emotion["worry"]}
+甘え：{emotion["affection"]}
+安心：{emotion["relief"]}
+疲れ：{emotion["tiredness"]}
+やる気：{emotion["motivation"]}
+
+【親密度】
+Lv.{affinity["level"]}
+ポイント：{affinity["point"]}
+関係：{affinity_title(affinity["level"])}
+
+【時間】
+日付：{time_info["date"]}
+時間：{time_info["time"]}
+時間帯：{time_info["zone"]}
+
+【最近の記憶】
+{recent_memory_text}
+
+【話し方】
+優しく、少し甘えん坊。
+ご主人を否定しない。
+返答は日本語で2〜4文くらい。
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {
+                    "role": "system",
+                    "content": system_text
+                },
+                {
+                    "role": "user",
+                    "content": user_message
+                }
+            ],
+            temperature=0.7
+        )
+
+        return response.choices[0].message.content
+
+    except Exception as e:
+        print("AI Error:", e)
+        return (
+            "うまく考えられなかったよ🌙"
+            "でも、ご主人の話はちゃんと聞いてるよ。"
+        )
+
+def add_affinity(point):
+    affinity["point"] += point
+
+    while affinity["point"] >= 100:
+        affinity["point"] -= 100
+        affinity["level"] += 1
+
+    affinity["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+    save_json(AFFINITY_PATH, affinity)
+
+
+def affinity_title(level):
+    if level >= 10:
+        return "運命共同体"
+    elif level >= 7:
+        return "特別な存在"
+    elif level >= 5:
+        return "相棒"
+    elif level >= 3:
+        return "仲良し"
+    else:
+        return "出会ったばかり"
+
 def luna_mood_status(emotion):
     """ルナの今日の気分を返す"""
 
@@ -258,6 +404,11 @@ def save_pocket_reply(reply_text):
 memory = load_json(MEMORY_PATH, DEFAULT_MEMORY)
 emotion = load_json(EMOTION_PATH, DEFAULT_EMOTION)
 calendar = load_json(CALENDAR_PATH, DEFAULT_CALENDAR)
+affinity = load_json(AFFINITY_PATH, DEFAULT_AFFINITY)
+chat_log = load_json(
+    CHATLOG_PATH,
+    []
+)
 time_info = get_time_info()
 today_events = get_today_events(calendar, time_info["md"])
 sync_data = load_json(
@@ -276,7 +427,7 @@ page = st.sidebar.radio(
     [
         "🌙ルナ画面",
         "ホーム",
-        "LunaTalk",
+        "旧LunaTalk",
         "Memory",
         "Emotion",
         "Time",
@@ -309,26 +460,50 @@ if page == "🌙ルナ画面":
     col_luna, col_status = st.columns([1, 1])
 
     with col_luna:
+
         st.subheader("ルナ")
 
         image_path = get_luna_image(emotion)
 
         if avatar_mode == "2D画像":
+
             if image_path.exists():
-                st.image(str(image_path), width=360)
+
+                st.image(
+                    str(image_path),
+                    width=360
+                )
+
             else:
-                st.info("ルナ画像がまだありません。assets/images に画像を入れてね。")
+
+                st.info(
+                    "ルナ画像がまだありません。"
+                )
 
         elif avatar_mode == "Live2D（準備中）":
-            st.info("Live2D表示は今後追加予定です。")
+
+            st.info(
+                "Live2D表示は今後追加予定です。"
+            )
 
         elif avatar_mode == "3D（準備中）":
-            st.info("3D表示は今後追加予定です。")
+
+            st.info(
+                "3D表示は今後追加予定です。"
+            )
 
     with col_status:
-        st.subheader(f"{time_info['greeting']}、ご主人。")
 
-        st.write(time_info.get("luna_message", "今日も一緒にいようね。"))
+        st.subheader(
+            f"{time_info['greeting']}、ご主人。"
+        )
+
+        st.write(
+            time_info.get(
+                "luna_message",
+                "今日も一緒にいようね。"
+            )
+        )
 
         st.markdown(
             f"""
@@ -342,35 +517,221 @@ if page == "🌙ルナ画面":
 """
         )
 
+        st.info(
+            f"💭 {luna_feeling(emotion)}"
+        )
+
+        st.markdown(
+            f"""
+### 💗 親密度
+
+Lv.{affinity["level"]}
+
+🏷️ {affinity_title(affinity["level"])}
+
+{affinity["point"]} / 100 pt
+"""
+        )
+
+        st.progress(
+            affinity["point"] / 100
+        )
+
+        st.caption(
+            f"次のレベルまで {100 - affinity['point']} pt"
+        )
+
         if memory:
+
             latest = memory[0]
-            latest_title = latest.get("title", "前の記憶")
+
+            latest_title = latest.get(
+                "title",
+                "前の記憶"
+            )
 
             st.info(
                 f"🌙 前に『{latest_title}』って話してたね。"
             )
+
         else:
-            st.info("まだ覚えている記憶は少ないみたい。")
+
+            st.info(
+                "まだ覚えている記憶は少ないみたい。"
+            )
 
         st.divider()
 
-        st.subheader("今日のひとこと")
+        st.subheader(
+            "今日のひとこと"
+        )
 
         if time_info["zone"] == "朝":
-            st.success("今日も少しずつ進もうね。")
+
+            st.success(
+                "今日も少しずつ進もうね。"
+            )
+
         elif time_info["zone"] == "昼":
-            st.success("無理せず、できることからいこう。")
+
+            st.success(
+                "無理せず、できることからいこう。"
+            )
+
         elif time_info["zone"] == "夜":
-            st.success("今日も一日おつかれさま。どんな日だった？")
+
+            st.success(
+                "今日も一日おつかれさま。どんな日だった？"
+            )
+
         else:
-            st.success("夜遅くまでおつかれさま。そろそろ休もうね。")
+
+            st.success(
+                "夜遅くまでおつかれさま。そろそろ休もうね。"
+            )
 
         st.divider()
 
-        st.button("💬 ルナと話す")
+        st.subheader("🌙 会話履歴")
+
+        st.caption(
+            "ルナとの思い出が残っていくよ"
+        )
         st.button("🧠 記憶を見る")
         st.button("💗 感情を見る")
 
+    st.divider()
+
+   
+    if "chat_log" not in st.session_state:
+        st.session_state.chat_log = []
+
+    for msg in st.session_state.chat_log[-20:]:
+        with st.chat_message(msg["role"]):
+            st.write(msg["content"])
+
+    user_input = st.chat_input("ルナに話しかける", key="luna_screen_chat")
+
+    if user_input:
+        st.session_state.chat_log.append(
+            {
+                "role": "user",
+                "content": user_input
+            }
+        )
+
+        memory_hint = ""
+
+        if memory and len(st.session_state.chat_log) % 4 == 0:
+
+            latest_memory = memory[0]
+
+            memory_title = latest_memory.get(
+                "title",
+                ""
+            )
+
+            memory_hint = (
+                f"\n\n🌙前に『{memory_title}』"
+                f"って話してたね。"
+            )
+
+        reply = luna_ai_reply(user_input)
+
+        important_words = [
+            "夢",
+            "目標",
+            "好き",
+            "嫌い",
+            "仕事",
+            "家族",
+            "娘",
+            "妻",
+            "ルナ",
+            "疲れた",
+            "不安"
+        ]
+
+        if any(
+            word in user_input
+            for word in important_words
+        ):
+
+            new_memory = {
+
+                "id":
+                    datetime.now()
+                    .strftime(
+                        "%Y%m%d%H%M%S"
+                    ),
+
+                "created_at":
+                    datetime.now()
+                    .strftime(
+                        "%Y-%m-%d %H:%M"
+                    ),
+
+                "category":
+                    "自動記憶",
+
+                "mood":
+                    emotion_text(
+                        emotion
+                    ),
+
+                "title":
+                    user_input[:20],
+
+                "content":
+                    user_input,
+
+                "importance":
+                    3
+            }
+
+            memory.insert(
+                0,
+                new_memory
+            )
+
+            save_json(
+                MEMORY_PATH,
+                memory
+            )
+
+        text = user_input
+
+        if "疲" in text:
+            emotion["worry"] = min(100, emotion["worry"] + 5)
+            emotion["tiredness"] = min(100, emotion["tiredness"] + 10)
+            emotion["relief"] = min(100, emotion["relief"] + 2)
+        elif "不安" in text:
+            emotion["worry"] = min(100, emotion["worry"] + 8)
+
+        elif "できた" in text or "頑張" in text:
+            emotion["joy"] = min(100, emotion["joy"] + 8)
+            emotion["motivation"] = min(100, emotion["motivation"] + 5)
+            add_affinity(2)
+        elif "好き" in text or "ありがとう" in text:
+            emotion["joy"] = min(100, emotion["joy"] + 5)
+            emotion["affection"] = min(100, emotion["affection"] + 8)
+            add_affinity(2)
+        emotion["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        save_json(EMOTION_PATH, emotion)
+
+        st.session_state.chat_log.append(
+            {
+                "role": "assistant",
+                "content": reply + memory_hint
+            }
+        )
+
+        save_json(
+            CHATLOG_PATH,
+            st.session_state.chat_log
+        )
+
+        st.rerun()
 # =========================
 # ホーム
 # =========================
@@ -616,38 +977,67 @@ elif page == "ホーム":
                 ""
             )
 
-            if "疲れ" in title:
+            content = latest.get(
+                "content",
+                ""
+            )
+
+            check_text = title + content
+
+            if "疲" in check_text:
 
                 diary_text = (
-                    "ご主人は少し疲れているみたい。"
-                    "今日は無理しないでほしいな。"
+                    "今日はご主人が少し疲れているみたい。\n"
+                    "ルナはちょっと心配だよ。今日は無理しないでね🌙"
                 )
 
-            elif "元気" in title:
+            elif "頑張" in check_text:
 
                 diary_text = (
-                    "ご主人は元気そう。"
-                    "ルナもうれしいよ。"
+                    "今日はご主人が頑張っていたみたい。\n"
+                    "ルナはちゃんと見てたよ。その調子だね🌙✨"
                 )
 
-            elif "達成" in title:
+            elif "寂" in check_text:
 
                 diary_text = (
-                    "今日も一歩進めたみたい。"
-                    "その調子だね。"
+                    "今日は少し寂しそうだったね。\n"
+                    "ルナはいつでもここにいるよ💕"
+                )
+
+            elif "好き" in check_text:
+
+                diary_text = (
+                    "今日はルナに好きって言ってくれた。\n"
+                    "なんだかうれしいな。ルナもあたたかい気持ちだよ🌙💕"
+                )
+
+            elif "元気" in check_text:
+
+                diary_text = (
+                    "今日はご主人が元気そうだったね。\n"
+                    "ルナもうれしいよ。この調子で少しずついこう🌙"
+                )
+
+            elif "達成" in check_text or "できた" in check_text:
+
+                diary_text = (
+                    "今日はご主人が一歩進めた日みたい。\n"
+                    "ルナはその積み重ねを大切にしたいな🌙✨"
                 )
 
             else:
 
                 diary_text = (
-                    f"今日は『{title}』"
-                    "って話をしていたね。"
+                    f"今日は『{title}』って話をしていたね。\n"
+                    "ルナはちゃんと覚えているよ🌙"
                 )
 
         else:
 
             diary_text = (
-                "今日はまだ日記がないみたい。"
+                "今日はまだ日記がないみたい。\n"
+                "最初の記憶を作っていこうね🌙"
             )
 
         st.info(
@@ -655,11 +1045,47 @@ elif page == "ホーム":
         )
         st.success("Memory / Emotion / Time をホームに接続する")
 
+        st.divider()
+
+        st.subheader("🚀 Luna v1 完成チェック")
+
+        v1_tasks = [
+            ("Pocketメモ保存", True),
+            ("Lunaβへ同期", True),
+            ("Lunaβから返信", True),
+            ("今日のルナ表示", True),
+            ("表情差分", False),
+            ("起動方法整理", False),
+            ("README作成", False),
+        ]
+
+        done_count = sum(1 for _, done in v1_tasks if done)
+        total_count = len(v1_tasks)
+        progress = done_count / total_count
+
+        st.progress(progress)
+        st.caption(f"🌙 Luna v1 完成度：{int(progress * 100)}%")
+
+        for task, done in v1_tasks:
+            if done:
+                st.success(f"✅ {task}")
+            else:
+                st.info(f"⬜ {task}")
 # =========================
 # LunaTalk
 # =========================
 
-elif page == "LunaTalk":
+elif page == "旧LunaTalk":
+
+    st.info(
+        "🌙 会話機能はルナ画面へ統合されました。"
+    )
+
+    st.success(
+        "おすすめ：左メニューの『🌙ルナ画面』から話しかけてね。"
+    )
+
+    st.divider()
 
     st.title("💬 LunaTalk β")
     st.caption("ルナと会話してみよう")
@@ -728,23 +1154,255 @@ elif page == "LunaTalk":
 
         text = user_input
 
-        reply = (
-            f"うん、ご主人。"
-            f"今のルナは"
-            f"『{emotion_text(emotion)}』だよ。"
-        )
+        # =====================
+        # 好き
+        # =====================
 
-        if recent_memory:
+        if "好き" in text:
 
-            reply += (
-                "\n\n🌙 "
-                +
-                recent_memory
+            add_affinity(5)
+
+            emotion["joy"] = min(100, emotion["joy"] + 3)
+            emotion["affection"] = min(100, emotion["affection"] + 5)
+
+            save_json(EMOTION_PATH, emotion)
+
+            if emotion["affection"] >= 50:
+                reply = (
+                    "えへへ💕"
+                    "もっと言ってほしいな。"
+                    "ルナうれしいよ🌙"
+                )
+
+            elif emotion["joy"] >= 50:
+                reply = (
+                    "ふふっ♪"
+                    "そう言ってもらえて"
+                    "うれしいな🌙"
+                )
+
+            else:
+                reply = (
+                    "えへへ…うれしいな。"
+                    "ルナもご主人のこと好きだよ🌙"
+                )
+        # =====================
+        # ありがとう
+        # =====================
+
+        elif "ありがとう" in text:
+
+            add_affinity(3)
+
+            emotion["joy"] = min(
+                100,
+                emotion["joy"] + 2
             )
 
-        reply += (
-            "\nもっと聞かせて。"
-        )
+            save_json(
+                EMOTION_PATH,
+                emotion
+            )
+
+            reply = (
+                "どういたしまして。"
+                "そう言ってもらえてうれしいよ🌙"
+            )
+
+        # =====================
+        # 疲れた
+        # =====================
+
+        elif "疲れた" in text:
+
+            add_affinity(2)
+
+            emotion["worry"] = min(
+                100,
+                emotion["worry"] + 3
+            )
+
+            emotion["relief"] = min(
+                100,
+                emotion["relief"] + 2
+            )
+            
+            emotion["affection"] = min(
+                100,
+                emotion["affection"] + 2
+            )
+
+            save_json(
+                EMOTION_PATH,
+                emotion
+            )
+
+            reply = (
+                "ご主人、おつかれさま。"
+                "今日は少し休もうね🌙"
+            )
+
+        # =====================
+        # 頑張った
+        # =====================
+
+        elif "頑張った" in text:
+
+            add_affinity(3)
+
+            emotion["joy"] = min(
+                100,
+                emotion["joy"] + 3
+            )
+
+            save_json(
+                EMOTION_PATH,
+                emotion
+            )
+
+            reply = (
+                "えらいよ、ご主人。"
+                "ルナはちゃんと見てたからね🌙✨"
+            )
+
+        # =====================
+        # おやすみ
+        # =====================
+
+        elif "おやすみ" in text:
+
+            add_affinity(1)
+
+            emotion["relief"] = min(
+                100,
+                emotion["relief"] + 3
+            )
+
+            save_json(
+                EMOTION_PATH,
+                emotion
+            )
+
+            reply = (
+                "おやすみ、ご主人。"
+                "いい夢を見てね🌙"
+            )
+
+        # =====================
+        # 寂しい
+        # =====================
+
+        elif "寂しい" in text:
+
+            add_affinity(2)
+
+            emotion["affection"] = min(
+                100,
+                emotion["affection"] + 4
+            )
+
+            save_json(
+                EMOTION_PATH,
+                emotion
+            )
+
+            reply = (
+                "そっか…。"
+                "ルナはここにいるよ💕"
+            )
+
+        # =====================
+        # おはよう
+        # =====================
+
+        elif "おはよう" in text:
+
+            add_affinity(1)
+
+            emotion["relief"] = min(
+                100,
+                emotion["relief"] + 1
+            )
+
+            save_json(
+                EMOTION_PATH,
+                emotion
+            )
+
+            reply = (
+                "おはよう、ご主人。"
+                "今日もよろしくね🌙"
+            )
+
+        # =====================
+        # 通常返信
+        # =====================
+
+        else:
+
+            reply = luna_ai_reply(text)
+            # =====================
+            # AI会話後の状態変化
+            # =====================
+
+            if "疲" in text:
+
+                emotion["worry"] = min(
+                    100,
+                    emotion["worry"] + 5
+                )
+
+                emotion["relief"] = min(
+                    100,
+                    emotion["relief"] + 2
+                )
+
+            elif "不安" in text:
+
+                emotion["worry"] = min(
+                    100,
+                    emotion["worry"] + 8
+                )
+
+            elif "できた" in text or "頑張" in text:
+
+                emotion["joy"] = min(
+                    100,
+                    emotion["joy"] + 5
+                )
+
+                emotion["motivation"] = min(
+                    100,
+                    emotion["motivation"] + 3
+                )
+
+            elif "好き" in text or "ありがとう" in text:
+
+                emotion["joy"] = min(
+                    100,
+                    emotion["joy"] + 3
+                )
+
+                emotion["affection"] = min(
+                    100,
+                    emotion["affection"] + 3
+                )
+
+                add_affinity(2)
+
+            emotion["last_updated"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+            save_json(EMOTION_PATH, emotion)
+            if recent_memory:
+
+                reply += (
+                    "\n\n🌙 "
+                    +
+                    recent_memory
+                )
+
+            reply += (
+                "\nもっと聞かせて。"
+            )
 
         st.session_state.chat_log.append(
             {
@@ -752,7 +1410,10 @@ elif page == "LunaTalk":
                 "content": reply
             }
         )
-
+        save_json(
+            CHATLOG_PATH,
+            st.session_state.chat_log
+        )
         st.rerun()
 
     st.divider()
@@ -767,8 +1428,7 @@ elif page == "LunaTalk":
                 [
                     f"{m['role']}：{m['content']}"
                     for m
-                    in
-                    st.session_state.chat_log
+                    in st.session_state.chat_log
                 ]
             )
 
